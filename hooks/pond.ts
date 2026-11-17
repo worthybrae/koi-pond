@@ -13,7 +13,7 @@ const W = 1600
 const H = 1000
 
 import type { Sky } from '../types'
-import { gateCss } from './light'
+import { gateCss, lightCss, lightLayer } from './light'
 import { conditionOf, localSeconds, type Conditions } from './weather'
 import { PADS_CSS, padsSvg } from './pads'
 import { seasonOf, VEIL, VEIL_DEF } from './surface'
@@ -1025,7 +1025,7 @@ function drawPond(sky: Sky | undefined, drawnAt: number): string {
 @keyframes sway{from{transform:translate(calc(var(--w,1) * -6px),calc(var(--w,1) * -4px))}to{transform:translate(calc(var(--w,1) * 6px),calc(var(--w,1) * 5px))}}
 .shade use{filter:brightness(0)}
 ${[...WIDTHS].map(w => `.${widthClass(w)}{stroke-width:${w}px}`).join('')}${[...DASHES].map(w => `.d${w.replace('.', '')}{stroke-dasharray:${w} .7}`).join('')}
-${PADS_CSS}${sky === undefined ? '' : gateCss(sky.weather.sunrise, sky.weather.sunset)}${cond === undefined ? '' : weatherCss(cond)}
+${PADS_CSS}${sky === undefined ? '' : gateCss(sky.weather.sunrise, sky.weather.sunset) + lightCss(sky.weather.sunrise, sky.weather.sunset)}${cond === undefined ? '' : weatherCss(cond)}
 ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${night ? 4 : 3}px ${colour})}`).join('')}
 .still{display:none}
 @media (prefers-reduced-motion: reduce){*{animation:none!important}.mv{display:none}.still{display:inline}}`
@@ -1048,6 +1048,9 @@ ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${
     `<g class="shade" transform="translate(16 22)" opacity="0.32">${shadows}</g>` +
     fish +
     (sky === undefined || cond === undefined ? '' : weatherLayer(cond, (sky.changed - drawnAt) / 1000)) +
+    // The day's light over the water and the fish: a dark blue at night, dawn and dusk tints. The lily pads lie on top
+    // and dim themselves, so their buds can glow over the dark.
+    (sky === undefined ? '' : lightLayer(local, sky.weather.sunrise, sky.weather.sunset)) +
     `<g class="shade" transform="translate(8 10)" opacity="0.35">${padShadows}</g>` +
     pads +
     VEIL

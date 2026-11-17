@@ -49,12 +49,12 @@ for (const month of [0, 3, 6, 10]) test(`the busiest scene of month ${month + 1}
   expect(svg.length <= 131072 ? 'fits' : `${month}: ${svg.length}`).toBe('fits')
 })
 
-test('the pond is only water, fish, lily pads, rain and snow: no floor, clouds, light, gusts, glints or critters', () => {
+test('the pond is only water, fish, lily pads, rain, snow and the day\'s light: no floor, clouds, gusts, glints or critters', () => {
   for (const w of [{}, { code: 95, cloud: 100, wind: 60, temp: -3 }, { code: 75 }, { code: 45 }]) {
     for (const month of [0, 3, 6, 10]) {
       const at = Date.UTC(2026, month, 16, 15)
       const svg = pondSvg({ ...skyOf(w), since: at, changed: at }, at)
-      for (const cls of ['wd', 'gu', 'gl', 'cl', 'fog', 'fl', 'lw', 'ld', 'ff', 'dfl', 'fa']) expect(svg).not.toMatch(new RegExp(`class="${cls}[ "]`))
+      for (const cls of ['wd', 'gu', 'gl', 'cl', 'fog', 'fl', 'ff', 'dfl', 'fa']) expect(svg).not.toMatch(new RegExp(`class="${cls}[ "]`))
       for (const id of ['deep', 'sky', 'bank', 'frost', 'cloud', 'gust']) expect(svg).not.toContain(`url(#${id})`)
       expect(svg).toContain('class="deep"')
     }
@@ -328,4 +328,13 @@ test('rain and snow at once still fit, every month', () => {
     const svg = pondSvg({ ...skyOf({ code, wind: 60, sunrise: 325, sunset: 1231 }, { dark: true, grow: 1.25 }), since: at, changed: at }, at + 2000)
     expect(svg.length <= 131072 ? 'fits' : `${code}/${month}: ${svg.length}`).toBe('fits')
   }
+})
+
+test('the light starts at the scene\'s New York time of day', () => {
+  // T0 is 03:00 in New York.
+  expect(pondSvg(skyOf(), T0)).toMatch(/class="ld"[^>]*animation-delay:-10800s/)
+})
+
+test('no sky, no light', () => {
+  expect(pondSvg()).not.toMatch(/class="l[wd]"/)
 })
