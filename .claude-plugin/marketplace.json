@@ -1,0 +1,11 @@
+{
+  "name": "koi-pond",
+  "owner": { "name": "Worthy Rae" },
+  "plugins": [
+    {
+      "name": "koi",
+      "source": "./",
+      "description": "A dark koi pond as the Claude desktop backdrop: pixel-art fish under lily pads, a new lineup each day"
+    }
+  ]
+}

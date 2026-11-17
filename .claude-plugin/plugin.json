@@ -1,0 +1,9 @@
+{
+  "name": "koi",
+  "version": "0.21.0",
+  "description": "A dark koi pond as the Claude desktop backdrop: pixel-art fish swim under lily pads, a different lineup each day, with rare visitors now and then",
+  "author": { "name": "Worthy Rae" },
+  "license": "MIT",
+  "keywords": ["backdrop", "theme", "koi", "pixel-art", "desktop"],
+  "types": "./types/index.d.ts"
+}
