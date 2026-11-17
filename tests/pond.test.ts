@@ -49,12 +49,12 @@ for (const month of [0, 3, 6, 10]) test(`the busiest scene of month ${month + 1}
   expect(svg.length <= 131072 ? 'fits' : `${month}: ${svg.length}`).toBe('fits')
 })
 
-test('the pond is only water, fish and lily pads: no floor, weather, light, gusts, glints or critters', () => {
+test('the pond is only water, fish, lily pads, rain and snow: no floor, clouds, light, gusts, glints or critters', () => {
   for (const w of [{}, { code: 95, cloud: 100, wind: 60, temp: -3 }, { code: 75 }, { code: 45 }]) {
     for (const month of [0, 3, 6, 10]) {
       const at = Date.UTC(2026, month, 16, 15)
       const svg = pondSvg({ ...skyOf(w), since: at, changed: at }, at)
-      for (const cls of ['wd', 'gu', 'gl', 'rd', 'sn', 'cl', 'fog', 'fl', 'wx', 'lw', 'ld', 'ff', 'dfl', 'fa']) expect(svg).not.toMatch(new RegExp(`class="${cls}[ "]`))
+      for (const cls of ['wd', 'gu', 'gl', 'cl', 'fog', 'fl', 'lw', 'ld', 'ff', 'dfl', 'fa']) expect(svg).not.toMatch(new RegExp(`class="${cls}[ "]`))
       for (const id of ['deep', 'sky', 'bank', 'frost', 'cloud', 'gust']) expect(svg).not.toContain(`url(#${id})`)
       expect(svg).toContain('class="deep"')
     }
@@ -296,4 +296,36 @@ test('with motion turned off the swimming fish hide and the day\'s fish hold sti
   for (const [x, y] of poses) expect(x! >= 120 && x! <= 1480 && y! >= 100 && y! <= 900 ? 'on the pond' : `${x},${y}`).toBe('on the pond')
   const nearest = Math.min(...poses.flatMap((a, i) => poses.slice(i + 1).map(b => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!))))
   expect(nearest >= 150 ? 'apart' : `${nearest}`).toBe('apart')
+})
+
+const count = (svg: string, cls: string) => (svg.match(new RegExp(`class="${cls}[ "]`, 'g')) ?? []).length
+
+test('rain and snow draw what New York has', () => {
+  expect(count(pondSvg(skyOf({ code: 53 })), 'rd')).toBeLessThanOrEqual(10)
+  expect(count(pondSvg(skyOf({ code: 65 })), 'rd')).toBeGreaterThanOrEqual(25)
+  expect(count(pondSvg(skyOf({ code: 75 })), 'sn')).toBeGreaterThanOrEqual(30)
+  const clear = pondSvg(skyOf())
+  expect(count(clear, 'rd')).toBe(0)
+  expect(count(clear, 'sn')).toBe(0)
+})
+
+test('only rain and snow come back: no clouds, fog, lightning or frost', () => {
+  for (const w of [{ code: 3, cloud: 95 }, { code: 45 }, { code: 95 }, { temp: -3 }]) {
+    const svg = pondSvg(skyOf(w))
+    for (const cls of ['cl', 'fog', 'fl']) expect(svg).not.toMatch(new RegExp(`class="${cls}[ "]`))
+    expect(svg).not.toContain('url(#frost)')
+  }
+})
+
+test('new weather fades in from when it changed, and a redraw keeps its place', () => {
+  expect(pondSvg(skyOf({ code: 63 }, { changed: T0 }), T0)).toContain('class="wx" style="animation-delay:0s"')
+  expect(pondSvg(skyOf({ code: 63 }, { changed: T0 }), T0 + 30_000)).toContain('class="wx" style="animation-delay:-30s"')
+})
+
+test('rain and snow at once still fit, every month', () => {
+  for (const code of [67, 86]) for (const month of [0, 3, 6, 10]) {
+    const at = Date.UTC(2026, month, 16, 3)
+    const svg = pondSvg({ ...skyOf({ code, wind: 60, sunrise: 325, sunset: 1231 }, { dark: true, grow: 1.25 }), since: at, changed: at }, at + 2000)
+    expect(svg.length <= 131072 ? 'fits' : `${code}/${month}: ${svg.length}`).toBe('fits')
+  }
 })

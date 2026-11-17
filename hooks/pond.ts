@@ -14,7 +14,7 @@ const H = 1000
 
 import type { Sky } from '../types'
 import { gateCss } from './light'
-import { localSeconds } from './weather'
+import { conditionOf, localSeconds, type Conditions } from './weather'
 import { PADS_CSS, padsSvg } from './pads'
 import { seasonOf, VEIL, VEIL_DEF } from './surface'
 import { DASHES, WIDTHS, addTile, drawBacking, drawRuns, drawSolid, hashOf, n1, shade, short, smoothPath, widthClass, type Point, type Tiles } from './tiles'
@@ -938,6 +938,50 @@ export function stillPose(points: readonly Point[], posed: Point[]): string | un
   return `translate(${x} ${y}) rotate(${Math.round(angle)})`
 }
 
+// ---------- rain and snow ----------
+
+/** Drops for each strength of rain, and how fast they come (1 is the drizzle's pace); flakes for each strength of snow. */
+const RAIN_DROPS = [0, 8, 18, 30]
+const RAIN_PACE = [1, 1, 0.8, 0.55]
+const SNOWFLAKES = [0, 24, 42]
+
+/** New York's rain and snow over the pond, faded in from when the weather changed: raindrops blinking on the water,
+ *  snowflakes drifting down onto it. Empty when it is dry. */
+function weatherLayer(c: Conditions, fadeFrom: number): string {
+  let out = ''
+  if (c.rain > 0) {
+    out += `<rect width="${W}" height="${H}" fill="#8d9ca0" opacity="${[0, 0.05, 0.08, 0.12][c.rain]}"/>`
+    for (let k = 0; k < RAIN_DROPS[c.rain]!; k += 1) {
+      const x = Math.round(80 + hashOf(k, 41, 7) * (W - 160))
+      const y = Math.round(60 + hashOf(k, 42, 7) * (H - 120))
+      // Four speeds and five starts of drop, each a class, so a drop carries only its place.
+      out += `<rect class="rd r${k % 4} d${Math.floor(hashOf(k, 45, 7) * 5)}" x="${x}" y="${y}"/>`
+    }
+  }
+  for (let k = 0; k < SNOWFLAKES[c.snow]!; k += 1) {
+    const x = Math.round(40 + hashOf(k, 61, 7) * (W - 80))
+    const y = Math.round(40 + hashOf(k, 62, 7) * (H - 80))
+    out += `<rect class="sn r${k % 4} d${Math.floor(hashOf(k, 63, 7) * 5)}" x="${x}" y="${y}"/>`
+  }
+  return out === '' ? '' : `<g class="wx" style="animation-delay:${Math.round(fadeFrom)}s">${out}</g>`
+}
+
+/** The style rain and snow need: their paces and starts; `--w` sways the pads wider in wind, `--rs` quickens the rain.
+ *  Drops and flakes rest invisible until their animation runs, so with motion turned off none show. */
+function weatherCss(c: Conditions): string {
+  return (
+    `:root{--w:${(1 + c.wind * 1.4).toFixed(2)};--rs:${RAIN_PACE[c.rain]}}` +
+    `.wx{animation:wx 60s ease-out both}@keyframes wx{from{opacity:0}}` +
+    `.rd{width:4px;height:4px;fill:#d8ece6;opacity:0;animation:rd linear infinite}` +
+    `@keyframes rd{0%{opacity:.85}12%{opacity:.3}24%,100%{opacity:0}}` +
+    `.sn{width:5px;height:5px;fill:#f2f8ff;opacity:0;animation:sn linear infinite}` +
+    `@keyframes sn{0%{transform:translate(-26px,-44px);opacity:0}15%{opacity:.9}80%{transform:translate(0,0);opacity:.75}100%{transform:translate(0,0);opacity:0}}` +
+    `.r0{animation-duration:calc(var(--rs) * 3s)}.r1{animation-duration:calc(var(--rs) * 4.3s)}.r2{animation-duration:calc(var(--rs) * 5.6s)}.r3{animation-duration:calc(var(--rs) * 6.9s)}` +
+    `.sn.r0{animation-duration:6s}.sn.r1{animation-duration:7.5s}.sn.r2{animation-duration:9s}.sn.r3{animation-duration:10.5s}` +
+    `.d0{animation-delay:var(--t0)}.d1{animation-delay:calc(var(--t0) - 1.3s)}.d2{animation-delay:calc(var(--t0) - 2.9s)}.d3{animation-delay:calc(var(--t0) - 4.4s)}.d4{animation-delay:calc(var(--t0) - 5.8s)}`
+  )
+}
+
 /** The pond under this sky, drawn as of `drawnAt` (ms since the epoch): every motion is placed where it is at that
  *  moment, so a scene redrawn later carries on instead of starting over. */
 export function pondSvg(sky?: Sky, drawnAt: number = sky?.since ?? 0): string {
@@ -952,6 +996,7 @@ function drawPond(sky: Sky | undefined, drawnAt: number): string {
   const { deep, shadows, fish, defs: paths } = fishLayers(drawnAt, sky?.grow ?? 1, sky?.weather.offset ?? -18000)
   const night = sky?.dark === true
   const local = sky === undefined ? 0 : localSeconds(drawnAt, sky.weather.offset)
+  const cond = sky === undefined ? undefined : conditionOf(sky.weather)
   const season = sky === undefined ? undefined : seasonOf(drawnAt, sky.weather.offset)
   const { pads, shadows: padShadows, defs: padDefs } = padsSvg({
     clock: drawnAt / 1000,
@@ -980,7 +1025,7 @@ function drawPond(sky: Sky | undefined, drawnAt: number): string {
 @keyframes sway{from{transform:translate(calc(var(--w,1) * -6px),calc(var(--w,1) * -4px))}to{transform:translate(calc(var(--w,1) * 6px),calc(var(--w,1) * 5px))}}
 .shade use{filter:brightness(0)}
 ${[...WIDTHS].map(w => `.${widthClass(w)}{stroke-width:${w}px}`).join('')}${[...DASHES].map(w => `.d${w.replace('.', '')}{stroke-dasharray:${w} .7}`).join('')}
-${PADS_CSS}${sky === undefined ? '' : gateCss(sky.weather.sunrise, sky.weather.sunset)}
+${PADS_CSS}${sky === undefined ? '' : gateCss(sky.weather.sunrise, sky.weather.sunset)}${cond === undefined ? '' : weatherCss(cond)}
 ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${night ? 4 : 3}px ${colour})}`).join('')}
 .still{display:none}
 @media (prefers-reduced-motion: reduce){*{animation:none!important}.mv{display:none}.still{display:inline}}`
@@ -1002,6 +1047,7 @@ ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${
     `<rect class="haze" width="${W}" height="${H}" fill="#1d2c27" opacity=".3"/>` +
     `<g class="shade" transform="translate(16 22)" opacity="0.32">${shadows}</g>` +
     fish +
+    (sky === undefined || cond === undefined ? '' : weatherLayer(cond, (sky.changed - drawnAt) / 1000)) +
     `<g class="shade" transform="translate(8 10)" opacity="0.35">${padShadows}</g>` +
     pads +
     VEIL
