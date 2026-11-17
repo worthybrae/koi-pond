@@ -120,6 +120,11 @@ function lilyBud(kind: 'pink' | 'white'): Tiles {
   return tiles
 }
 
+/** The night's dark over the pond (the light layer's `ld`), and how dark a pad goes at night, to match the water. */
+const NIGHT = '#040b24'
+/** The soft light round a lily's bud at night. */
+const BUD_LIGHT = { pink: '#ffd6ea', white: '#f4f0ff' } as const
+
 export type PadDraw = {
   /** Seconds since the epoch, for the clock-placed drift. */
   clock: number
@@ -134,12 +139,21 @@ export function padsSvg(o: PadDraw): { pads: string; shadows: string; defs: stri
   let shadows = ''
   const gated = (kind: Gate, inner: string) => (o.light === undefined ? (kind === 'dy' ? inner : '') : gate(kind, o.light.local, o.light.sunrise, o.light.sunset, inner))
   PADS.forEach((p, k) => {
-    let body = solid(padTiles(p, k, o.season), T, '#0d2418')
+    const tiles = padTiles(p, k, o.season)
+    let body = solid(tiles, T, '#0d2418')
+    // At night the pad dims with the water under it: its own outline in the night's dark, no filter to redraw.
+    let night = drawBacking(tiles, NIGHT).replaceAll('<path ', '<path class="pd-night" ')
+    let bud = ''
     if (p.lily !== undefined) {
-      const place = `transform="translate(${-Math.round((p.r * 0.3) / T) * T} ${-Math.round((p.r * 0.25) / T) * T})"`
+      const [x, y] = [-Math.round((p.r * 0.3) / T) * T, -Math.round((p.r * 0.25) / T) * T]
+      const place = `transform="translate(${x} ${y})"`
       body += gated('dy', `<g class="lo" ${place}><use href="#lo-${p.lily}"/></g>`)
-      body += gated('dn', `<g class="lb" ${place}><use href="#lb-${p.lily}"/></g>`)
+      // The bud glows: a soft light round it over the dimmed pad, and the bud itself left undimmed on top.
+      night += `<circle cx="${x}" cy="${y - 3}" r="22" fill="url(#bg-${p.lily})"/>`
+      bud = gated('dn', `<g class="lb" ${place}><use href="#lb-${p.lily}"/></g>`)
     }
+    if (o.light !== undefined) body += gated('dn', night)
+    body += bud
     const [ax, ay] = p.drift
     const loop = `M-${ax} 0a${ax} ${ay} 0 1 0 ${ax * 2} 0a${ax} ${ay} 0 1 0 -${ax * 2} 0`
     const spin = 50 + Math.round(hashOf(k, 21, 4) * 40)
@@ -151,9 +165,9 @@ export function padsSvg(o: PadDraw): { pads: string; shadows: string; defs: stri
   })
   // Each kind of lily drawn once, open and in bud, and used on every pad that has one.
   const kinds = [...new Set(PADS.flatMap(p => (p.lily === undefined ? [] : [p.lily])))]
-  const defs = kinds.map(kind => `<g id="lo-${kind}">${solid(lilyOpen(kind), F, kind === 'pink' ? '#9c4f6c' : '#8f879e')}</g><g id="lb-${kind}">${solid(lilyBud(kind), F, '#24502e')}</g>`).join('')
+  const defs = kinds.map(kind => `<radialGradient id="bg-${kind}"><stop offset="0" stop-color="${BUD_LIGHT[kind]}" stop-opacity=".55"/><stop offset="1" stop-color="${BUD_LIGHT[kind]}" stop-opacity="0"/></radialGradient><g id="lo-${kind}">${solid(lilyOpen(kind), F, kind === 'pink' ? '#9c4f6c' : '#8f879e')}</g><g id="lb-${kind}">${solid(lilyBud(kind), F, '#24502e')}</g>`).join('')
   return { pads, shadows, defs }
 }
 
-/** The style the pads need beyond the shared `sway`: the slow turn. */
-export const PADS_CSS = `.spin{animation:spin ease-in-out infinite alternate}@keyframes spin{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}`
+/** The style the pads need beyond the shared `sway`: how dark a pad goes at night, and the slow turn. */
+export const PADS_CSS = `.pd-night{opacity:.45}.spin{animation:spin ease-in-out infinite alternate}@keyframes spin{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}`

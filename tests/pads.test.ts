@@ -75,3 +75,30 @@ test('the pads and lilies do not shimmer: a plain bead of water, no twinkling pe
   expect(pads).not.toContain('class="opal"')
   expect(defs).not.toContain('class="gr"')
 })
+
+test('at night each pad dims and each lily\'s bud glows over it', () => {
+  const { pads, defs } = padsSvg({ clock: 0, light: { local: 0, sunrise: 404, sunset: 997 } })
+  const groups = pads.split('<g id="pd').slice(1)
+  expect(groups.length).toBe(PADS.length)
+  PADS.forEach((p, k) => {
+    const g = groups[k]!
+    expect(g).toMatch(/<g class="dn" opacity="1"[^>]*><path class="pd-night" stroke="#040b24"/)
+    if (p.lily === undefined) return expect(g).not.toContain('url(#bg-')
+    const halo = g.indexOf(`fill="url(#bg-${p.lily})"`)
+    const bud = g.indexOf(`<use href="#lb-${p.lily}"/>`)
+    expect(halo >= 0 && halo < bud ? 'halo under bud' : `halo ${halo}, bud ${bud}`).toBe('halo under bud')
+  })
+  expect(defs).toContain('<radialGradient id="bg-pink"')
+  expect(defs).toContain('<radialGradient id="bg-white"')
+})
+
+test('by day the night dimming and the halos are shut', () => {
+  const { pads } = padsSvg({ clock: 0, light: { local: 12 * 3600, sunrise: 404, sunset: 997 } })
+  expect(pads).toMatch(/<g class="dn" opacity="0"[^>]*><path class="pd-night"/)
+})
+
+test('with no sky the lilies show open and nothing dims or glows', () => {
+  const { pads } = padsSvg({ clock: 0 })
+  expect(pads).not.toContain('url(#bg-')
+  expect(pads).not.toContain('pd-night')
+})

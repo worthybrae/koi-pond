@@ -338,3 +338,29 @@ test('the light starts at the scene\'s New York time of day', () => {
 test('no sky, no light', () => {
   expect(pondSvg()).not.toMatch(/class="l[wd]"/)
 })
+
+/** The fish drawn with a glow: their ids. */
+const glowing = (svg: string) => [...svg.matchAll(/<g id="f(\d+)">((?:(?!<g id="f\d).)*)/g)].filter(m => /<g class="h\w">/.test(m[2]!)).map(m => m[1]!)
+
+test('glowing fish glow brighter at night', () => {
+  expect(pondSvg(skyOf({}, { dark: true }), T0)).toContain('drop-shadow(0 0 8px')
+  expect(pondSvg(skyOf(), T0 + 9 * 3600_000)).toContain('drop-shadow(0 0 3px')
+})
+
+test('at night the glowing fish shine over the dark, and hide with the moving fish when motion is off', () => {
+  // A day with glowing visitors.
+  let at = T0
+  while (glowing(pondSvg(skyOf({}, { dark: true }), at)).length === 0) at += 86_400_000
+  const svg = pondSvg(skyOf({}, { dark: true }), at)
+  const ids = glowing(svg)
+  const copies = /<g class="dn"[^>]*><g class="mv">((?:<use href="#f\d+"\/>)+)<\/g><\/g>/.exec(svg)
+  expect(copies === null ? 'no copies' : 'copies').toBe('copies')
+  expect([...copies![1]!.matchAll(/#f(\d+)/g)].map(m => m[1]).sort().join(' ')).toBe(ids.sort().join(' '))
+  const where = svg.indexOf(copies![0])
+  expect(where > svg.indexOf('class="ld"') ? 'over the dark' : 'under').toBe('over the dark')
+  expect(where < svg.indexOf('<g class="shade" transform="translate(8 10)"') ? 'under the pads' : 'over').toBe('under the pads')
+})
+
+test('by day no glowing copies are drawn, so a clear day costs nothing more', () => {
+  expect(pondSvg(skyOf(), T0 + 9 * 3600_000)).not.toMatch(/<g class="mv">(<use href="#f\d+"\/>)+<\/g><\/g>/)
+})

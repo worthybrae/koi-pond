@@ -13,7 +13,7 @@ const W = 1600
 const H = 1000
 
 import type { Sky } from '../types'
-import { gateCss, lightCss, lightLayer } from './light'
+import { gate, gateCss, lightCss, lightLayer } from './light'
 import { conditionOf, localSeconds, type Conditions } from './weather'
 import { PADS_CSS, padsSvg } from './pads'
 import { seasonOf, VEIL, VEIL_DEF } from './surface'
@@ -840,7 +840,8 @@ function motion(swim: Swim, seconds: number, pathId: string): string {
 /** The fish's shadows, the fish, and the `defs` their paths are kept in. A shadow is the fish itself, used again in
  *  black and set down and to the right on the floor, so it follows every move without carrying a copy of the moves. */
 /** The fish in two depths, each with its shadows, and the `defs` their paths and kinds are kept in. */
-type FishLayers = { deep: string; shadows: string; fish: string; defs: string }
+/** The fish layers; `glows` is a copy of each glowing fish, for drawing over the night's dark. */
+type FishLayers = { deep: string; shadows: string; fish: string; glows: string; defs: string }
 
 /** The kinds of visitor that keep to the deep water: the glowing ones, lighting it from below. */
 const DEEP_VISITORS = new Set(['school', 'glow'])
@@ -855,6 +856,7 @@ function fishLayers(drawnAt: number, grow: number, offset: number): FishLayers {
   let still = ''
   let stillShadows = ''
   let deepStill = ''
+  let glows = ''
   const posed: Point[] = []
   const sprites = new Map<string, string>()
   const day = Math.floor((at + offset) / 86400)
@@ -906,6 +908,7 @@ function fishLayers(drawnAt: number, grow: number, offset: number): FishLayers {
     // its shadow with it. A rare visitor is away most of the time, so it stays away.
     const pose = swim.visible === undefined ? stillPose(swim.points, posed) : undefined
     const kept = pose === undefined ? '' : `<g id="q${i}" class="still" transform="${pose}">${body.replace('"/>', '" class="pose"/>')}</g>`
+    if (sp.glow !== undefined) glows += `<use href="#f${i}"/>`
     if (low) {
       deep += drawn
       deepStill += kept
@@ -920,6 +923,7 @@ function fishLayers(drawnAt: number, grow: number, offset: number): FishLayers {
     deep: `<g class="mv">${deep}</g>${deepStill}`,
     shadows: `<g class="mv">${shadows}</g>${stillShadows}`,
     fish: `<g class="mv">${fish}</g>${still}`,
+    glows,
     defs,
   }
 }
@@ -993,7 +997,7 @@ export const LIMIT = 131072
 
 /** The pond: water, fish and lily pads, nothing else. */
 function drawPond(sky: Sky | undefined, drawnAt: number): string {
-  const { deep, shadows, fish, defs: paths } = fishLayers(drawnAt, sky?.grow ?? 1, sky?.weather.offset ?? -18000)
+  const { deep, shadows, fish, glows, defs: paths } = fishLayers(drawnAt, sky?.grow ?? 1, sky?.weather.offset ?? -18000)
   const night = sky?.dark === true
   const local = sky === undefined ? 0 : localSeconds(drawnAt, sky.weather.offset)
   const cond = sky === undefined ? undefined : conditionOf(sky.weather)
@@ -1026,7 +1030,7 @@ function drawPond(sky: Sky | undefined, drawnAt: number): string {
 .shade use{filter:brightness(0)}
 ${[...WIDTHS].map(w => `.${widthClass(w)}{stroke-width:${w}px}`).join('')}${[...DASHES].map(w => `.d${w.replace('.', '')}{stroke-dasharray:${w} .7}`).join('')}
 ${PADS_CSS}${sky === undefined ? '' : gateCss(sky.weather.sunrise, sky.weather.sunset) + lightCss(sky.weather.sunrise, sky.weather.sunset)}${cond === undefined ? '' : weatherCss(cond)}
-${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${night ? 4 : 3}px ${colour})}`).join('')}
+${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${night ? 8 : 3}px ${colour})}`).join('')}
 .still{display:none}
 @media (prefers-reduced-motion: reduce){*{animation:none!important}.mv{display:none}.still{display:inline}}`
 
@@ -1051,6 +1055,9 @@ ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${
     // The day's light over the water and the fish: a dark blue at night, dawn and dusk tints. The lily pads lie on top
     // and dim themselves, so their buds can glow over the dark.
     (sky === undefined ? '' : lightLayer(local, sky.weather.sunrise, sky.weather.sunset)) +
+    // At night the glowing fish shine over the dark: a copy of each on top, drawn only in a night scene so a day's pond
+    // pays nothing for it, and hidden with the moving fish when motion is off.
+    (sky === undefined || !night || glows === '' ? '' : gate('dn', local, sky.weather.sunrise, sky.weather.sunset, `<g class="mv">${glows}</g>`)) +
     `<g class="shade" transform="translate(8 10)" opacity="0.35">${padShadows}</g>` +
     pads +
     VEIL
