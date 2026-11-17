@@ -36,3 +36,18 @@ test('readings near an edge do not redraw the pond; real changes do, and only we
   const wet = nextSky(first, { ...W, code: 63, wind: 14.9, cloud: 50 }, T0 + 900_000, T0)
   expect(wet.changed).toBe(T0 + 900_000)
 })
+
+test('rain that keeps falling does not fade out and back in when clouds, wind, strength or frost shift', () => {
+  const first = nextSky(null, W, T0, T0)
+  const rain = nextSky(first, { ...W, code: 63, cloud: 85, wind: 10 }, T0 + 900_000, T0)
+  expect(rain.changed).toBe(T0 + 900_000)
+  const gusty = nextSky(rain, { ...W, code: 61, cloud: 100, wind: 25 }, T0 + 1_800_000, T0)
+  expect(gusty === rain).toBe(false)
+  expect(gusty.changed).toBe(rain.changed)
+  const snow = nextSky(first, { ...W, code: 73, temp: 1.5 }, T0 + 900_000, T0)
+  const frozen = nextSky(snow, { ...W, code: 75, temp: -1.5 }, T0 + 1_800_000, T0)
+  expect(frozen.changed).toBe(snow.changed)
+  const stopped = nextSky(frozen, W, T0 + 2_700_000, T0)
+  const again = nextSky(stopped, { ...W, code: 73 }, T0 + 3_600_000, T0)
+  expect(again.changed).toBe(T0 + 3_600_000)
+})

@@ -840,7 +840,8 @@ function motion(swim: Swim, seconds: number, pathId: string): string {
 /** The fish's shadows, the fish, and the `defs` their paths are kept in. A shadow is the fish itself, used again in
  *  black and set down and to the right on the floor, so it follows every move without carrying a copy of the moves. */
 /** The fish in two depths, each with its shadows, and the `defs` their paths and kinds are kept in. */
-/** The fish layers; `glows` holds the glowing fish on a night, drawn over the night's dark instead of under it. */
+/** The fish layers; `glows` holds the glowing fish on a night (moving, and held still for motion off), drawn over the
+ *  night's dark instead of under it. */
 type FishLayers = { deep: string; shadows: string; fish: string; glows: string; defs: string }
 
 /** The kinds of visitor that keep to the deep water: the glowing ones, lighting it from below. */
@@ -857,6 +858,7 @@ function fishLayers(drawnAt: number, grow: number, offset: number, night = false
   let stillShadows = ''
   let deepStill = ''
   let glows = ''
+  let glowStill = ''
   const posed: Point[] = []
   const sprites = new Map<string, string>()
   const day = Math.floor((at + offset) / 86400)
@@ -911,8 +913,7 @@ function fishLayers(drawnAt: number, grow: number, offset: number, night = false
     if (night && sp.glow !== undefined) {
       // On a night the glowing fish swim over the dark, so they shine; moved there, not copied, so they cost no more.
       glows += drawn
-      if (low) deepStill += kept
-      else still += kept
+      glowStill += kept
     } else if (low) {
       deep += drawn
       deepStill += kept
@@ -927,7 +928,7 @@ function fishLayers(drawnAt: number, grow: number, offset: number, night = false
     deep: `<g class="mv">${deep}</g>${deepStill}`,
     shadows: `<g class="mv">${shadows}</g>${stillShadows}`,
     fish: `<g class="mv">${fish}</g>${still}`,
-    glows: glows === '' ? '' : `<g class="mv">${glows}</g>`,
+    glows: glows === '' ? '' : `<g class="mv">${glows}</g>${glowStill}`,
     defs,
   }
 }

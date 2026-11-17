@@ -9,7 +9,7 @@ A dark koi pond behind your chats in the Claude desktop app. Pixel-art fish swim
 - **Rare fish.** Two rares, a very rare and a legend cross the pond now and then. Most of the time they're away, so catching one is the fun part.
 - **Lilies that keep time.** They open by day and close into buds at night, following New York's sunrise and sunset.
 - **Night.** After sunset the pond goes dark blue, the lily buds glow, and the glowing fish shine brighter. Dawn and dusk get their own tints.
-- **Rain and snow.** When it's raining or snowing in New York, drops ring the water or flakes drift down over the pond.
+- **Rain and snow.** When it's raining or snowing in New York, drops patter on the water or flakes drift down over the pond.
 - **Fish that grow.** They get a little bigger over their first few weeks in your pond.
 
 ## Install

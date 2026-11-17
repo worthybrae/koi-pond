@@ -19,10 +19,11 @@ export function fallbackWeather(now: number): Weather {
   return { code: 0, cloud: 0, rain: 0, snow: 0, wind: 8, temp: 10, sunrise: 390, sunset: 1050, offset: -new Date(now).getTimezoneOffset() * 60, at: 0 }
 }
 
-/** What of a weather fades in when it changes: clouds, rain, snow, fog, storm, frost. */
+/** What of a weather fades in when it changes: rain starting or stopping, snow starting or stopping. A shift in
+ *  strength, cloud, wind or frost while it keeps falling does not, so the rain does not blink out and fade back. */
 function fadedKey(w: Weather): string {
   const c = conditionOf(w)
-  return [Math.round(c.clouds * 6), c.rain, c.snow, c.fog, c.storm, c.frost].join(':')
+  return [c.rain > 0, c.snow > 0].join(':')
 }
 
 /** Whether a new reading is close enough to the last that the pond should not change: the same weather code, cloud
@@ -38,7 +39,7 @@ function isSimilar(a: Weather, b: Weather): boolean {
 }
 
 /** The sky now, from the last sky and the weather in hand: the last one itself when nothing drawn would change, so
- *  the pond is not redrawn for nothing. New clouds, rain, snow, fog, storm or frost fade in from now; wind and the
+ *  the pond is not redrawn for nothing. Rain or snow starting fades in from now; wind and the
  *  first sky of a session do not. */
 export function nextSky(last: Sky | null, reading: Weather, now: number, born: number): Sky {
   const sun = (w: Weather) => `${w.sunrise}:${w.sunset}:${w.offset}`

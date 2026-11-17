@@ -372,3 +372,14 @@ test('by day the glowing fish swim with the others, under the day\'s light', () 
   const svg = pondSvg(skyOf(), at)
   for (const i of glowing(svg)) expect(svg.indexOf(`<g id="f${i}">`) < svg.indexOf('class="lw"') ? 'under' : `f${i} over`).toBe('under')
 })
+
+test('with motion turned off at night the glowing fish hold still over the dark too', () => {
+  let at = T0
+  while (glowing(pondSvg(skyOf({}, { dark: true }), at)).length === 0) at += 86_400_000
+  const svg = pondSvg(skyOf({}, { dark: true }), at)
+  const dark = svg.indexOf('class="ld"')
+  for (const i of glowing(svg)) {
+    const pose = svg.indexOf(`<g id="q${i}" class="still"`)
+    if (pose >= 0) expect(pose > dark ? 'over the dark' : `q${i} under`).toBe('over the dark')
+  }
+})
