@@ -149,7 +149,7 @@ export function padsSvg(o: PadDraw): { pads: string; shadows: string; defs: stri
       const place = `transform="translate(${x} ${y})"`
       body += gated('dy', `<g class="lo" ${place}><use href="#lo-${p.lily}"/></g>`)
       // The bud glows: a soft light round it over the dimmed pad, and the bud itself left undimmed on top.
-      night += `<circle cx="${x}" cy="${y - 3}" r="22" fill="url(#bg-${p.lily})"/>`
+      night += `<circle cx="${x}" cy="${y - 3}" r="32" fill="url(#bg-${p.lily})"/>`
       bud = gated('dn', `<g class="lb" ${place}><use href="#lb-${p.lily}"/></g>`)
     }
     if (o.light !== undefined) body += gated('dn', night)
@@ -165,7 +165,7 @@ export function padsSvg(o: PadDraw): { pads: string; shadows: string; defs: stri
   })
   // Each kind of lily drawn once, open and in bud, and used on every pad that has one.
   const kinds = [...new Set(PADS.flatMap(p => (p.lily === undefined ? [] : [p.lily])))]
-  const defs = kinds.map(kind => `<radialGradient id="bg-${kind}"><stop offset="0" stop-color="${BUD_LIGHT[kind]}" stop-opacity=".55"/><stop offset="1" stop-color="${BUD_LIGHT[kind]}" stop-opacity="0"/></radialGradient><g id="lo-${kind}">${solid(lilyOpen(kind), F, kind === 'pink' ? '#9c4f6c' : '#8f879e')}</g><g id="lb-${kind}">${solid(lilyBud(kind), F, '#24502e')}</g>`).join('')
+  const defs = kinds.map(kind => `<radialGradient id="bg-${kind}"><stop offset="0" stop-color="${BUD_LIGHT[kind]}" stop-opacity=".75"/><stop offset=".35" stop-color="${BUD_LIGHT[kind]}" stop-opacity=".3"/><stop offset="1" stop-color="${BUD_LIGHT[kind]}" stop-opacity="0"/></radialGradient><g id="lo-${kind}">${solid(lilyOpen(kind), F, kind === 'pink' ? '#9c4f6c' : '#8f879e')}</g><g id="lb-${kind}">${solid(lilyBud(kind), F, '#24502e')}</g>`).join('')
   return { pads, shadows, defs }
 }
 

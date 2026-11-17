@@ -13,7 +13,7 @@ const W = 1600
 const H = 1000
 
 import type { Sky } from '../types'
-import { gate, gateCss, lightCss, lightLayer } from './light'
+import { gateCss, lightCss, lightLayer } from './light'
 import { conditionOf, localSeconds, type Conditions } from './weather'
 import { PADS_CSS, padsSvg } from './pads'
 import { seasonOf, VEIL, VEIL_DEF } from './surface'
@@ -840,13 +840,13 @@ function motion(swim: Swim, seconds: number, pathId: string): string {
 /** The fish's shadows, the fish, and the `defs` their paths are kept in. A shadow is the fish itself, used again in
  *  black and set down and to the right on the floor, so it follows every move without carrying a copy of the moves. */
 /** The fish in two depths, each with its shadows, and the `defs` their paths and kinds are kept in. */
-/** The fish layers; `glows` is a copy of each glowing fish, for drawing over the night's dark. */
+/** The fish layers; `glows` holds the glowing fish on a night, drawn over the night's dark instead of under it. */
 type FishLayers = { deep: string; shadows: string; fish: string; glows: string; defs: string }
 
 /** The kinds of visitor that keep to the deep water: the glowing ones, lighting it from below. */
 const DEEP_VISITORS = new Set(['school', 'glow'])
 
-function fishLayers(drawnAt: number, grow: number, offset: number): FishLayers {
+function fishLayers(drawnAt: number, grow: number, offset: number, night = false): FishLayers {
   const at = drawnAt / 1000
   const ids = new Map<string, string>()
   let defs = ''
@@ -908,8 +908,12 @@ function fishLayers(drawnAt: number, grow: number, offset: number): FishLayers {
     // its shadow with it. A rare visitor is away most of the time, so it stays away.
     const pose = swim.visible === undefined ? stillPose(swim.points, posed) : undefined
     const kept = pose === undefined ? '' : `<g id="q${i}" class="still" transform="${pose}">${body.replace('"/>', '" class="pose"/>')}</g>`
-    if (sp.glow !== undefined) glows += `<use href="#f${i}"/>`
-    if (low) {
+    if (night && sp.glow !== undefined) {
+      // On a night the glowing fish swim over the dark, so they shine; moved there, not copied, so they cost no more.
+      glows += drawn
+      if (low) deepStill += kept
+      else still += kept
+    } else if (low) {
       deep += drawn
       deepStill += kept
     } else {
@@ -923,7 +927,7 @@ function fishLayers(drawnAt: number, grow: number, offset: number): FishLayers {
     deep: `<g class="mv">${deep}</g>${deepStill}`,
     shadows: `<g class="mv">${shadows}</g>${stillShadows}`,
     fish: `<g class="mv">${fish}</g>${still}`,
-    glows,
+    glows: glows === '' ? '' : `<g class="mv">${glows}</g>`,
     defs,
   }
 }
@@ -997,7 +1001,7 @@ export const LIMIT = 131072
 
 /** The pond: water, fish and lily pads, nothing else. */
 function drawPond(sky: Sky | undefined, drawnAt: number): string {
-  const { deep, shadows, fish, glows, defs: paths } = fishLayers(drawnAt, sky?.grow ?? 1, sky?.weather.offset ?? -18000)
+  const { deep, shadows, fish, glows, defs: paths } = fishLayers(drawnAt, sky?.grow ?? 1, sky?.weather.offset ?? -18000, sky?.dark === true)
   const night = sky?.dark === true
   const local = sky === undefined ? 0 : localSeconds(drawnAt, sky.weather.offset)
   const cond = sky === undefined ? undefined : conditionOf(sky.weather)
@@ -1055,9 +1059,8 @@ ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${
     // The day's light over the water and the fish: a dark blue at night, dawn and dusk tints. The lily pads lie on top
     // and dim themselves, so their buds can glow over the dark.
     (sky === undefined ? '' : lightLayer(local, sky.weather.sunrise, sky.weather.sunset)) +
-    // At night the glowing fish shine over the dark: a copy of each on top, drawn only in a night scene so a day's pond
-    // pays nothing for it, and hidden with the moving fish when motion is off.
-    (sky === undefined || !night || glows === '' ? '' : gate('dn', local, sky.weather.sunrise, sky.weather.sunset, `<g class="mv">${glows}</g>`)) +
+    // On a night the glowing fish swim over the dark, so they shine.
+    glows +
     `<g class="shade" transform="translate(8 10)" opacity="0.35">${padShadows}</g>` +
     pads +
     VEIL
