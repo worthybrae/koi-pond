@@ -1,5 +1,6 @@
-// The lily pads: two clusters and a few strays on both sides of the chat column, big pads down to new leaves. Each
-// drifts slowly round its own loop, turns a little, and bobs more in wind; water lilies on the big ones open by day and
+// The lily pads: two clusters and a few strays on both sides of the chat column, big pads down to new leaves. They
+// float with the water, down the right side and up the left, off one edge of the pond and back on at the other, and
+// bump off each other and off the banks as they go; each turns a little and bobs more in wind; water lilies on the big ones open by day and
 // close into buds at night. Drawn in 5 px tiles, the same as the koi.
 
 import { gate, type Gate } from './light'
@@ -9,29 +10,198 @@ import { addTile, drawBacking, drawRuns, hashOf, n1, type Point, type Tiles } fr
 /** Tiles drawn over a solid backing in `grout`, so the gaps between them read as dark seams, not water. */
 const solid = (tiles: Tiles, size: number, grout: string) => drawBacking(tiles, grout) + drawRuns(tiles, size)
 
-/** A pad: its home (px), its radius (px), how far it drifts round its home (px, across and down), how long a loop
- *  takes (s), where its notch points, whether it shows a curled-up edge and in what colour underneath, and its lily. */
+/** A pad: where it starts (px), its radius (px), how fast it sets off (px/s, across and down), where its notch points,
+ *  whether it shows a curled-up edge and in what colour underneath, and its lily. */
 export type Pad = {
   at: Point
   r: number
-  drift: Point
-  loop: number
+  v: Point
   notch: number
   curl?: { at: number; under: string }
   lily?: 'pink' | 'white'
 }
 
-// Homes kept clear of the chat column (tests/pads.test.ts checks every drift against it).
+// Starts kept clear of the chat column (tests/pads.test.ts checks every place each pad goes against it). The water on
+// the right flows down and on the left up; each pad floats with it at its own pace and drifts across its side, so the
+// quicker ones catch up and bump.
 export const PADS: readonly Pad[] = [
-  { at: [1430, 150], r: 70, drift: [40, 25], loop: 300, notch: 2.3, curl: { at: 5.4, under: '#7a2f38' }, lily: 'pink' },
-  { at: [1530, 310], r: 46, drift: [22, 30], loop: 260, notch: 4.1 },
-  { at: [1320, 66], r: 22, drift: [30, 12], loop: 210, notch: 0.9 },
-  { at: [1460, 830], r: 66, drift: [40, 24], loop: 340, notch: 3.6, lily: 'white' },
-  { at: [1320, 930], r: 32, drift: [28, 16], loop: 240, notch: 5.5, curl: { at: 1.2, under: '#4a7a3a' } },
-  { at: [150, 560], r: 72, drift: [34, 40], loop: 380, notch: 0.4, curl: { at: 3.4, under: '#7a2f38' }, lily: 'white' },
-  { at: [290, 870], r: 46, drift: [40, 18], loop: 280, notch: 2.9, lily: 'pink' },
-  { at: [110, 160], r: 30, drift: [28, 24], loop: 230, notch: 4.8 },
+  { at: [1430, 150], r: 70, v: [1.6, 3.6], notch: 2.3, curl: { at: 5.4, under: '#7a2f38' }, lily: 'pink' },
+  { at: [1530, 310], r: 46, v: [-2, 4.2], notch: 4.1 },
+  { at: [1320, 66], r: 22, v: [2.4, 5.4], notch: 0.9 },
+  { at: [1460, 830], r: 66, v: [-1.3, 3.9], notch: 3.6, lily: 'white' },
+  { at: [1320, 930], r: 32, v: [2.2, 5], notch: 5.5, curl: { at: 1.2, under: '#4a7a3a' } },
+  { at: [150, 560], r: 72, v: [1.3, -3.8], notch: 0.4, curl: { at: 3.4, under: '#7a2f38' }, lily: 'white' },
+  { at: [290, 870], r: 46, v: [-2, -4.6], notch: 2.9, lily: 'pink' },
+  { at: [110, 160], r: 30, v: [2.4, -5.2], notch: 4.8 },
 ]
+
+// ---------- the drift ----------
+
+/** The scene's size, the pond's. */
+const W = 1600
+const H = 1000
+/** The drift repeats every eighteen minutes, on the clock (a day holds a whole number of them). With these paces and
+ *  this length the last stretch eases every pad home without one passing over another. */
+export const CYCLE = 1080
+/** How far past the top and bottom edges a pad floats before it comes round to the other edge: far enough that the
+ *  biggest is wholly out of sight. */
+const MARGIN = 90
+const LOOP = H + 2 * MARGIN
+/** The chat column the pads keep out of, and how far wind may bob a pad past where it floats (the `sway`, in a gale). */
+export const COLUMN: Point = [490, 1110]
+export const GALE = 6 * (1 + 1.4)
+/** The last stretch of the cycle, in which every pad eases back to where it was at the cycle's start, so the next one
+ *  carries on without a jump. */
+export const SETTLE = 240
+
+/** Where a pad may float across: from a little past the pond's side edge to the chat column, less what wind adds. */
+function banks(p: Pad): Point {
+  return p.at[0] < W / 2 ? [p.r * 0.2, COLUMN[0] - GALE - p.r - 2] : [COLUMN[1] + GALE + p.r + 2, W - p.r * 0.2]
+}
+
+/** `y` folded into the loop the pads float round, from above the top edge to below the bottom one. */
+const fold = (y: number) => ((((y + MARGIN) % LOOP) + LOOP) % LOOP) - MARGIN
+/** The shortest way from one height to another round the loop. */
+const across = (d: number) => d - Math.round(d / LOOP) * LOOP
+
+/** A place on a pad's track: seconds into the cycle and where it is (px). */
+export type Stop = [number, number, number]
+
+/** Each pad's track over the cycle, as the places where it turns (a bump or a bank) or comes round from one edge to the
+ *  other; between them it floats in a straight line. Worked out once: the pads float like discs on water, each as
+ *  heavy as its size, and bounce off each other and off the banks without losing speed, and the water slowly brings
+ *  each back to its own pace. */
+export function padTracks(): { tracks: Stop[][]; bumps: number } {
+  if (cached !== undefined) return cached
+  const n = PADS.length
+  const pos: Point[] = PADS.map(p => [p.at[0], p.at[1]])
+  const vel: Point[] = PADS.map(p => [p.v[0], p.v[1]])
+  const mass = PADS.map(p => p.r * p.r)
+  // How fast the water carries each pad. When a quicker pad bumps into a slower one ahead, they trade paces, so the one
+  // in front goes on ahead and the two part instead of bumping again and again.
+  const pace = PADS.map(p => p.v[1])
+  const dt = 0.25
+  // The run starts SETTLE seconds before the cycle; where the pads are in that opening stretch is where the cycle's
+  // last stretch eases them to, so one cycle runs on into the next.
+  const marks: Stop[][] = PADS.map(() => [])
+  const lead: Stop[][] = PADS.map(() => [])
+  const mark = (k: number, t: number) => marks[k]!.push([t, pos[k]![0], pos[k]![1]])
+  let bumps = 0
+  for (let step = -SETTLE / dt; step * dt < CYCLE; step += 1) {
+    const t = step * dt
+    for (let k = 0; k < n; k += 1) {
+      if (t < 0 && step % 80 === 0) lead[k]!.push([t, pos[k]![0], pos[k]![1]])
+      if (t === 0) mark(k, 0)
+    }
+    for (let k = 0; k < n; k += 1) {
+      const [lo, hi] = banks(PADS[k]!)
+      const v = vel[k]!
+      const q = pos[k]!
+      q[0] += v[0] * dt
+      q[1] += v[1] * dt
+      // The water carries it: every so often a pad knocked off its way, slowed or sped by a bump, is eased back
+      // toward the way the water flows, so none is left idling out of sight.
+      const fx = Math.sign(v[0]) * Math.abs(PADS[k]!.v[0])
+      const fy = pace[k]!
+      if (step % 80 === 0 && Math.hypot(fx - v[0], fy - v[1]) > 0.25) {
+        v[0] += (fx - v[0]) * 0.35
+        v[1] += (fy - v[1]) * 0.35
+        if (t >= 0) mark(k, t)
+      }
+      if ((q[0] < lo && v[0] < 0) || (q[0] > hi && v[0] > 0)) {
+        v[0] = -v[0]
+        if (t >= 0) mark(k, t)
+      }
+      if (q[1] > H + MARGIN || q[1] < -MARGIN) {
+        // Out of sight past one edge: note where it left, and come round to the other. (Every other mark in a step is
+        // at the step's time, so the marks stay in order.)
+        if (t >= 0) mark(k, t - 0.04)
+        q[1] = fold(q[1])
+        if (t >= 0) mark(k, t)
+      }
+    }
+    for (let i = 0; i < n; i += 1) {
+      for (let j = i + 1; j < n; j += 1) {
+        const [pi, pj, vi, vj] = [pos[i]!, pos[j]!, vel[i]!, vel[j]!]
+        const dx = pj[0] - pi[0]
+        const dy = across(pj[1] - pi[1])
+        const d = Math.hypot(dx, dy)
+        if (d >= PADS[i]!.r + PADS[j]!.r || d === 0) continue
+        const [nx, ny] = [dx / d, dy / d]
+        const closing = (vi[0] - vj[0]) * nx + (vi[1] - vj[1]) * ny
+        if (closing <= 0) continue
+        // A bounce that keeps the pads' speed between them: each is pushed back along the line between their middles,
+        // the lighter one more.
+        const push = (2 * closing) / (mass[i]! + mass[j]!)
+        vi[0] -= push * mass[j]! * nx
+        vi[1] -= push * mass[j]! * ny
+        vj[0] += push * mass[i]! * nx
+        vj[1] += push * mass[i]! * ny
+        const ahead = Math.sign(pace[i]!) * dy > 0 ? j : i
+        const behind = ahead === j ? i : j
+        if (Math.sign(pace[i]!) === Math.sign(pace[j]!) && Math.abs(pace[behind]!) > Math.abs(pace[ahead]!)) {
+          ;[pace[i], pace[j]] = [pace[j]!, pace[i]!]
+        }
+        if (t >= 0) {
+          bumps += 1
+          mark(i, t)
+          mark(j, t)
+        }
+      }
+    }
+  }
+  const end = CYCLE - SETTLE
+  const tracks = marks.map((all, k) => {
+    // A pad marked twice at one moment (a bump and a bank together) keeps the later place.
+    const m = all.filter((s, i) => all[i + 1]?.[0] !== s[0])
+    // Where the run had the pad at `t`: on the straight line between the marks either side. (It never comes round an
+    // edge between two marks: that is marked.)
+    const at = (t: number): Point => {
+      const b = m.findIndex(s => s[0] >= t)
+      const [t0, x0, y0] = b === -1 ? m.at(-1)! : m[Math.max(0, b - 1)]!
+      const [t1, x1, y1] = b === -1 ? [CYCLE, pos[k]![0], pos[k]![1]] : m[b]!
+      const f = t1 === t0 ? 0 : (t - t0) / (t1 - t0)
+      return [x0 + (x1 - x0) * f, y0 + (y1 - y0) * f]
+    }
+    const out: Stop[] = [...m.filter(([t]) => t < end), [end, ...at(end)]]
+    // The cycle's last stretch: the pad eases from where the run has it to where it was that long before the start.
+    for (const [lt, lx, ly] of [...lead[k]!, [0, m[0]![1], m[0]![2]] as Stop]) {
+      const t = CYCLE + lt
+      if (t <= end) continue
+      const [x, y] = at(t)
+      const h = (lt + SETTLE) / SETTLE
+      const w = h * h * (3 - 2 * h)
+      const tx = x + (lx - x) * w
+      const ty = fold(y + across(ly - y) * w)
+      const [pt, px, py] = out.at(-1)!
+      if (Math.abs(ty - py) > LOOP / 2) {
+        // It comes round an edge on the way: leave by one and come back by the other, at the moment it would.
+        const down = ty < py
+        const gone = down ? H + MARGIN - py : py + MARGIN
+        const back = down ? ty + MARGIN : H + MARGIN - ty
+        const tc = pt + ((t - pt) * gone) / (gone + back)
+        const xc = px + ((tx - px) * gone) / (gone + back)
+        out.push([tc, xc, down ? H + MARGIN : -MARGIN], [tc + 0.04, xc, down ? -MARGIN : H + MARGIN])
+      }
+      out.push([t, tx, ty])
+    }
+    return out
+  })
+  cached = { tracks, bumps }
+  return cached
+}
+let cached: { tracks: Stop[][]; bumps: number } | undefined
+
+/** One keyframe rule per pad: its track, offset from where it is drawn. */
+function trackCss(): string {
+  return padTracks()
+    .tracks.map((track, k) => {
+      const [hx, hy] = PADS[k]!.at
+      const frames = track.map(([t, x, y]) => `${Number(((t / CYCLE) * 100).toFixed(3))}%{translate:${Math.round(x - hx)}px ${Math.round(y - hy)}px}`)
+      return `.f${k}{animation-name:f${k}}@keyframes f${k}{${frames.join('')}}`
+    })
+    .join('')
+}
 
 /** The pads' tile, the koi's. */
 const T = 5
@@ -126,8 +296,6 @@ const NIGHT = '#040b24'
 const BUD_LIGHT = { pink: '#ffd6ea', white: '#f4f0ff' } as const
 
 export type PadDraw = {
-  /** Seconds since the epoch, for the clock-placed drift. */
-  clock: number
   season?: Season
   /** The day's gates; absent when there is no sky to go by, and the lilies show open. */
   light?: { local: number; sunrise: number; sunset: number }
@@ -154,12 +322,10 @@ export function padsSvg(o: PadDraw): { pads: string; shadows: string; defs: stri
     }
     if (o.light !== undefined) body += gated('dn', night)
     body += bud
-    const [ax, ay] = p.drift
-    const loop = `M-${ax} 0a${ax} ${ay} 0 1 0 ${ax * 2} 0a${ax} ${ay} 0 1 0 -${ax * 2} 0`
     const spin = 50 + Math.round(hashOf(k, 21, 4) * 40)
     pads +=
       `<g id="pd${k}" transform="translate(${p.at[0]} ${p.at[1]})"><g class="sway${k % 2 === 1 ? ' b' : ''}" style="animation-duration:${9 + (k % 4) * 2}s">` +
-      `<g><animateMotion path="${loop}" dur="${p.loop}s" begin="-${n1(o.clock % p.loop)}s" repeatCount="indefinite"/>` +
+      `<g class="pf f${k}">` +
       `<g class="spin" style="animation-duration:${spin}s;animation-delay:calc(var(--t0) - ${Math.round(hashOf(k, 22, 4) * spin)}s)">${body}</g></g></g></g>`
     shadows += `<use href="#pd${k}"/>`
   })
@@ -169,5 +335,7 @@ export function padsSvg(o: PadDraw): { pads: string; shadows: string; defs: stri
   return { pads, shadows, defs }
 }
 
-/** The style the pads need beyond the shared `sway`: how dark a pad goes at night, and the slow turn. */
-export const PADS_CSS = `.pd-night{opacity:.45}.spin{animation:spin ease-in-out infinite alternate}@keyframes spin{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}`
+/** The style the pads need beyond the shared `sway`: how dark a pad goes at night, the slow turn, and the drift. */
+export const PADS_CSS =
+  `.pd-night{opacity:.45}.spin{animation:spin ease-in-out infinite alternate}@keyframes spin{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}` +
+  `.pf{animation:${CYCLE}s linear infinite;animation-delay:var(--t0)}${trackCss()}`

@@ -1,6 +1,6 @@
 # koi
 
-A dark koi pond behind your chats in the Claude desktop app. Pixel-art fish swim slow loops under lily pads, and the chat stays readable on top.
+A dark koi pond behind your chats in the Claude desktop app. Pixel-art fish swim slow loops through water where pools of light and shade sway as the surface ripples, under lily pads that float with the water, off one edge of the pond and back on at the other, bumping off each other as they go. The chat stays readable on top.
 
 ## What you'll see
 

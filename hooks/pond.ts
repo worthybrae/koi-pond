@@ -997,6 +997,22 @@ export function pondSvg(sky?: Sky, drawnAt: number = sky?.since ?? 0): string {
   return drawPond(sky, drawnAt)
 }
 
+/** Wide pools of light and shade in the water, each swaying slowly on its own beat: lighter where the rippling surface
+ *  gathers the light, darker where it spreads it. Big and soft, so the water never looks flat. */
+const RIPPLES = `<g>${(
+  [
+    ['rl', 420, 300, 560, 320, 90, 50, 31],
+    ['rl', 1240, 720, 600, 330, -110, 40, 37],
+    ['rl', 860, 90, 460, 230, 70, 60, 26],
+    ['rl', 1450, 380, 380, 260, -60, -70, 43],
+    ['rd', 260, 830, 520, 280, 80, -40, 34],
+    ['rd', 1380, 120, 420, 260, -70, 50, 29],
+    ['rd', 820, 560, 380, 240, 100, 30, 47],
+  ] as const
+)
+  .map(([fill, cx, cy, rx, ry, x, y, d], k) => `<ellipse class="rw" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#${fill})" style="--x:${x}px;--y:${y}px;--d:${d}s;--o:${k * 7}s"/>`)
+  .join('')}</g>`
+
 /** The most characters a backdrop scene may have. */
 export const LIMIT = 131072
 
@@ -1008,7 +1024,6 @@ function drawPond(sky: Sky | undefined, drawnAt: number): string {
   const cond = sky === undefined ? undefined : conditionOf(sky.weather)
   const season = sky === undefined ? undefined : seasonOf(drawnAt, sky.weather.offset)
   const { pads, shadows: padShadows, defs: padDefs } = padsSvg({
-    clock: drawnAt / 1000,
     season,
     light: sky === undefined ? undefined : { local, sunrise: sky.weather.sunrise, sunset: sky.weather.sunset },
   })
@@ -1032,6 +1047,8 @@ function drawPond(sky: Sky | undefined, drawnAt: number): string {
 @keyframes gr{0%,55%{stroke-opacity:0}100%{stroke-opacity:.7}}
 .sway{animation:sway ease-in-out infinite alternate;animation-delay:var(--t0)}.sway.b{animation-direction:alternate-reverse}
 @keyframes sway{from{transform:translate(calc(var(--w,1) * -6px),calc(var(--w,1) * -4px))}to{transform:translate(calc(var(--w,1) * 6px),calc(var(--w,1) * 5px))}}
+.rw{transform-box:fill-box;transform-origin:center;animation:rw ease-in-out infinite alternate;animation-duration:var(--d);animation-delay:calc(var(--t0) - var(--o))}
+@keyframes rw{from{transform:translate(calc(var(--x) * -1),calc(var(--y) * -1)) scale(.9,1.06)}to{transform:translate(var(--x),var(--y)) scale(1.1,.94)}}
 .shade use{filter:brightness(0)}
 ${[...WIDTHS].map(w => `.${widthClass(w)}{stroke-width:${w}px}`).join('')}${[...DASHES].map(w => `.d${w.replace('.', '')}{stroke-dasharray:${w} .7}`).join('')}
 ${PADS_CSS}${sky === undefined ? '' : gateCss(sky.weather.sunrise, sky.weather.sunset) + lightCss(sky.weather.sunrise, sky.weather.sunset)}${cond === undefined ? '' : weatherCss(cond)}
@@ -1042,6 +1059,8 @@ ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${
 
   const defs =
     `<linearGradient id="water" x1="0" y1="0" x2="1" y2="0.62"><stop offset="0" stop-color="#18231f"/><stop offset="0.25" stop-color="#1f2d28"/><stop offset="0.55" stop-color="#22312b"/><stop offset="0.78" stop-color="#192623"/><stop offset="1" stop-color="#0c1414"/></linearGradient>` +
+    `<radialGradient id="rl"><stop offset="0" stop-color="#4f7a66" stop-opacity=".34"/><stop offset=".55" stop-color="#3d6152" stop-opacity=".14"/><stop offset="1" stop-color="#3d6152" stop-opacity="0"/></radialGradient>` +
+    `<radialGradient id="rd"><stop offset="0" stop-color="#050b0d" stop-opacity=".5"/><stop offset=".6" stop-color="#050b0d" stop-opacity=".2"/><stop offset="1" stop-color="#050b0d" stop-opacity="0"/></radialGradient>` +
     `<pattern id="grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M0 0.5h12M0.5 0v12" stroke="#a9c4b8" stroke-opacity="0.045" fill="none"/></pattern>` +
     VEIL_DEF +
     padDefs +
@@ -1049,6 +1068,8 @@ ${Object.values(GLOWS).map(([cls, colour]) => `.${cls}{filter:drop-shadow(0 0 ${
 
   const body =
     `<rect width="${W}" height="${H}" fill="url(#water)"/>` +
+    // Light and shade moving slowly through the water, as the surface ripples overhead.
+    RIPPLES +
     `<rect width="${W}" height="${H}" fill="url(#grid)"/>` +
     // The deep fish (too far down to cast a shadow worth its cost), then a haze of water over them,
     // then the fish near the surface with their shadows further off.
